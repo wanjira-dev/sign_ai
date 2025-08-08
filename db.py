@@ -1,4 +1,4 @@
-# db.py
+
 import mysql.connector
 
 
