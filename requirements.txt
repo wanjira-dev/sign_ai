@@ -6,4 +6,5 @@ speechrecognition
 pyttsx3
 pipwin
 pyaudio
+scikit-learn
 
