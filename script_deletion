@@ -1,40 +1,22 @@
-# PowerShell script to delete user profiles except certain exclusions
-# First activate the script by running it in an elevated PowerShell session.
-# Run this code Set-ExecutionPolicy 
-ExecutionPolicy Bypass -Scope Process
-# Incase it brings an error saying the script needs to be signed run the below command.
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+# Set execution policy for this session (optional)
+Set-ExecutionPolicy Bypass -Scope Process -Force
 
-# List of profile names to exclude (case-insensitive)
-$excludedProfiles = @(
-    'freshmans',
-    
-    'Default',
-    'Labz',
-    'Public'
-)
+# Profiles to exclude
+$excludedProfiles = @('freshman', 'Default', 'Labz', 'Public')
 
-# Get all local user profiles (excluding special system accounts)
+# Show excluded profiles
+Write-Output "Excluded profiles:"
+$excludedProfiles
+
+# Get all non-special local profiles
 $profiles = Get-CimInstance Win32_UserProfile | Where-Object {
-    -not $_.Special -and
-    $_.LocalPath -ne $null
+    -not $_.Special -and $_.LocalPath
 }
 
 foreach ($profile in $profiles) {
     $profileName = Split-Path $profile.LocalPath -Leaf
-
-    if ($excludedProfiles -contains $profileName) {
-        Write-Host "Skipping excluded profile: $profileName" -ForegroundColor Yellow
-        continue
-    }
-
-    try {
-        Write-Host "Deleting profile: $profileName" -ForegroundColor Red
-        $profile | Remove-CimInstance -Verbose
-    }
-    catch {
-        Write-Host "Failed to delete profile: $profileName. Error: $_" -ForegroundColor DarkRed
-    }
+    if ($excludedProfiles -contains $profileName) { continue }
+    $profile | Remove-CimInstance
 }
 
-Write-Host "Profile cleanup complete." -ForegroundColor Green
+Write-Output "Profile cleanup complete."

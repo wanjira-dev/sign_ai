@@ -3,16 +3,16 @@ import numpy as np
 from tensorflow.keras.models import load_model
 
 # Load trained CNN model
-model = load_model('sign_model.tflite')
+model = load_model('sign_model.h5')
 
 #Labels for prediction
 labels = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 def predict_sign(image):
     # Convert to RGB 
-    img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     # Resize to match model input
-    img = cv2.resize(img, (64, 64))
+    img = cv2.resize(img, (40, 40))
 
     # Normalize and add batch dimension
     img = img.astype("float32") / 255.0
