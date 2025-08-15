@@ -12,15 +12,9 @@ def predict_sign(image):
     # Convert to RGB 
     img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     # Resize to match model input
-    img = cv2.resize(img, (40, 40))
-
-    # Normalize and add batch dimension
-    img = img.astype("float32") / 255.0
-    img = np.expand_dims(img, axis=0)
+    img = cv2.resize(img, (28, 28)).reshape(1, 28, 28, 1) / 255.0
 
     #Predict
     prediction = model.predict(img)
-    predicted_index = np.argmax(prediction)
-    confidence = prediction[0][predicted_index]
 
-    return labels[predicted_index], confidence
+    return labels[np.argmax(prediction)]
