@@ -1,4 +1,6 @@
-venv
+.venv
 __pycache__
 sign_model.tflite
 sign_mnist_train.csv
+.env
+certs\
