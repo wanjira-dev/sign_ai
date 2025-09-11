@@ -1,4 +1,5 @@
 streamlit
+streamlit-webrtc
 opencv-python
 tensorflow
 mysql-connector-python
@@ -7,4 +8,7 @@ pyttsx3
 pipwin
 pyaudio
 scikit-learn
+numpy
+pandas
+bcrypt
 
