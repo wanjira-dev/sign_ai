@@ -143,8 +143,86 @@ elif choice == "Interpreter" and st.session_state.user_info:
                     result_placeholder.info("Show a sign to the camera...")
                 time.sleep(0.1)
                 
+<<<<<<< HEAD
     # 2nd Mode: Voice to Sign
     elif app_mode == "Voice to Sign (Avatars)":
+=======
+        # Add a feedback mechanism
+        st.sidebar.header("Correction")
+        correct_sign_input = st.sidebar.text_input("If the last letter was wrong correct it here:", max_chars=1).upper()
+        if st.sidebar.button("Submit Correction"):
+            if st.session_state.last_log_id and correct_sign_input:
+                db.log_feedback(db.connection, st.session_state.last_log_id, correct_sign_input)
+                st.sidebar.success(f"Feedback submitted.")
+            else:
+                st.sidebar.warning("A prediction must be logged first")
+                    
+    elif action == "Voice to Sign":
+<<<<<<< HEAD
+        st.subheader("Speak and See Animated Interpreter")
+        if st.button("Start Speaking"):
+            st.write("Listening ...")
+            text = listen_voice()  # ✅ use listen_voice() from utils.py
+
+            if text and "Sorry" not in text:  # check valid recognition
+                # Show full sentence
+                st.subheader("You said:")
+                st.write(text)
+
+                # Define simple mapping of words → sign symbols (fallback if no avatar)
+                sign_dict = {
+                    "hi": "👋",
+                    "hello": "🙌",
+                    "my": "🤟",
+                    "name": "📛",
+                    "is": "➡️",
+                    "al": "🧑‍🦱"
+                }
+
+                # Build emoji sign sentence
+                words = text.split()
+                sign_output = [sign_dict.get(word.lower(), "❓") for word in words]
+
+                st.subheader("Avatar Signing")
+                st.write(" ".join(sign_output))  # show emoji-based sentence
+
+                # Try to show avatars (GIFs) if available
+                for word in words:
+                    gif_path = f"avatars/{st.session_state.gender}/{word.lower()}.gif"
+                    if os.path.exists(gif_path):
+                        st.image(gif_path, caption=word, use_container_width=True)
+                    else:
+                        st.info(f"({word}) → {sign_dict.get(word.lower(), '❓')}")
+            else:
+                st.error("Sorry, I could not recognize what you said.")
+
+    
+   # elif action == "Voice to Sign":
+   #     st.subheader("Speak and See Animated Interpreter")
+   #     if st.button("Start Speaking"):
+   #         st.write("Listening ...")
+   #         text = recognize_speech()
+
+   #         if text:
+   #             st.subheader("You said:")
+   #             st.write(text)
+
+    #            st.subheader("Avatar Signing")
+    #            words = text.split()
+
+    #            for word in words:
+    #                sign = get_sign_for_word(word.lowe())
+    #                if sign:
+    #                    st.image(sign, caption=word, use_container_width=True)
+    #                else:
+    #                    st.error("sorry i could not recognize what you said")
+  
+
+
+
+        
+=======
+>>>>>>> 7e0ed7b2a70e7063f66b838c0d896a0e0776df67
         st.header("Speak a word or sentence")
         if st.button("Start listening", type="summary"):
             with st.spinner("Listening..."):
@@ -194,5 +272,28 @@ elif choice == "Interpreter" and st.session_state.user_info:
                 else:
                     st.warning("No hand detected, Please position the hand clearly.")
                     
+<<<<<<< HEAD
             else:
                 st.warning("Please start webcam and enter label.")
+=======
+                    # Speak the new letter
+                    speak_text(stable_sign)
+                    st.session_state.last_spoken_sign = stable_sign # To prevent re-speaking
+                    
+                    # Log to TiDB
+                    current_user_id = st.session_state.user_info['user_id']
+                    log_id = db.log_prediction(
+                        connection=db_connection,
+                        session_id=st.session_state.session_id,
+                        prediction=stable_sign,
+                        confidence=data['confidence'],
+                        user_id=current_user_id
+                    )
+                    st.session_state.last_log_id = log_id
+                    
+                    # Clears buffer after successful action
+                    st.session_state.prediction_buffer.clear()
+                    
+        time.sleep(0.1)
+>>>>>>> 78da68d9250ec1bda744f3cc80cff2e438bef0e0
+>>>>>>> 7e0ed7b2a70e7063f66b838c0d896a0e0776df67
