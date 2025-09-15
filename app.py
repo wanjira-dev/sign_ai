@@ -11,31 +11,34 @@ from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, WebRtcMode
 
 # Project modules
 import tidb as db
-from model import load_sign_model, preprocess_image
-from utils import speak_text, listen_voice
+from model import load_landmark_model, get_embedding_from_frame
+from utils import speak_text, init_tts_engine, listen_voice
 
 # Page configuration and Initialization
 st.set_page_config(layout="wide", page_title="AI Sign Language Interpreter", page_icon="🧏‍♂️")
 st.title("🧏‍♂️ AI Sign Language Interpreter")
+st.markdown("An Advanced interpreter using MediaPipe, learned embeddings, and TiDB vector database.")
 
 # Load model and connect to Database
 @st.cache_resource
-
 def initialize_system():
-    """Load model and connect to DB. Caching prevents re-loading on every rerun."""
-    model = load_sign_model('sign_model.h5')
+    """Loads DB Connection, embedding and TTS Engine"""
     connection = db.get_db_connection()
     if connection:
         db.setup_database(connection)
-    return model, connection
-
-model, db_connection = initialize_system()
-label_mapping = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-if not db_connection:
-    st.error("Could not connect to TiDB.")
-    st.stop()
     
+    embedding_model = load_landmark_model('landmark_model.h5')
+    tts_engine = None
+    
+    return connection, embedding_model, tts_engine
+
+# Load all core components
+db_connection, model, tts_engine = initialize_system()
+
+if not all([db_connection, model, tts_engine]):
+    st.error("Could not initialize system components. Check terminal for logs")
+    st.stop()
+
 # Session State Management
 # For user authentication
 if 'user_info' not in st.session_state:
@@ -44,13 +47,11 @@ if 'user_info' not in st.session_state:
 # For the interpreter
 if 'session_id' not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
-if 'translated_sentence' not in st.session_state:
-    st.session_state.translated_sentence = ""
-if 'last_log_id' not in st.session_state:
-    st.session_state.last_log_id = None
-if 'prediction_buffer' not in st.session_state:
-    st.session_state.prediction_buffer = deque(maxlen=5) # To stabilize predictions
-    
+if 'last_match' not in st.session_state:
+    st.session_state.last_match = None
+if 'last_spoken_label' not in st.session_state:
+    st.session_state.last_spoken_label = ""
+
 # User authentication and navigation
 menu = ["Sign In", "Sign Up"] if not st.session_state.user_info else ["Interpreter", "Sign Out"]
 choice = st.sidebar.selectbox("Menu", menu)
@@ -96,128 +97,102 @@ elif choice == "Sign Out":
 # Main Interpreter Application
 elif choice == "Interpreter" and st.session_state.user_info:
     st.success(f"Logged in as ** {st.session_state.user_info['username']}**")
-    action = st.radio("Select Mode", ["Sign to Voice", "Voice to Sign"], horizontal=True)
     
-    # SIGN TO VOICE (Realtime)
-    if action == "Sign to Voice":
-        # Real-time video processing class
+    # App moe selection in the sidebar
+    app_mode = st.sidebar.radio(
+        "Select Mode",
+        ["Interpreter (Sign to Voice)", "Voice to Sign (Avatars)", "Admin: Teach AI New Signs"]
+    )
+    
+    # 1st Mode: Interpreter
+    if app_mode == "Interpreter (Sign to Voice)":
+        st.header("Real time Sign Interpreter")
+        st.info("Place your hand in the camera view. The system will find the closest matching sign")
+        
         class SignVideoTransformer(VideoTransformerBase):
             def recv(self, frame):
                 img = frame.to_ndarray(format="bgr24")
-                
-                # Preprocessing frame for the model
-                processed_img, display_img = preprocess_image(img, target_size=(64, 64))
-                
-                # Perform inference
-                prediction = model.predict(processed_img)
-                predicted_index = np.argmax(prediction)
-                predicted_sign = label_mapping[predicted_index]
-                confidence = float(np.max(prediction))
-                
-                # Stores prediction in session state and pass data to the main thread
-                st.session_state.current_prediction_data = {
-                    "sign": predicted_sign,
-                    "confidence": confidence
-                }
-                st.session_state.prediction_buffer.append(predicted_sign)
-                
-                # Draw prediction on the frame for visual feedback
-                cv2.putText(display_img, f"{predicted_sign} ({confidence:.2f})", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3)
+                query_embedding, display_img = get_embedding_from_frame(img, model)
+                if query_embedding:
+                    results = db.find_similar_signs(db_connection, query_embedding, top_k=1)
+                    if results:
+                        st.session_state.last_match = results[0]
                 return display_img
             
-        # UI Layout
-        col_video, col_text = st.columns([2, 1])
-            
+        col_video, col_result = st.columns([2, 1])
         with col_video:
-            st.header("Live Feed")
-            webrtc_streamer(
-                key="sign-interpreter-stream",
-                mode=WebRtcMode.SENDRECV,
-                video_processor_factory=SignVideoTransformer,
-                media_stream_constraints={"video": True, "audio": False},
-                async_processing=True,
-            )
-        with col_text:
-            st.header("Translated Sentence")
-            sentence_placeholder = st.empty()
-            sentence_placeholder.markdown(f"## `{st.session_state.translated_sentence}`")
-            st.header("Prediction Details")
-            details_placeholder = st.empty()
+           webrtc_streamer(key="interpreter-stream", video_processor_factory=SignVideoTransformer, async_processing=True)
+        with col_result:
+            st.subheader("Interpretation Result")
+            result_placeholder = st.empty()
+            while True:
+                if st.session_state.last_match:
+                    match = st.session_state.last_match
+                    label, similarity = match['label'], match['similarity']
+                    if similarity > 0.85:
+                        result_placeholder.success(f"##{label}\n(Similarity: {similarity:.2f})")
+                        if label != st.session_state.last_spoken_label:
+                            speak_text(label, tts_engine)
+                            st.session_state.last_spoken_label = label
+                            
+                    else:
+                        result_placeholder.warning("Match not found")
+                        st.session_state.last_spoken_label = ""
+                        
+                else:
+                    result_placeholder.info("Show a sign to the camera...")
+                time.sleep(0.1)
                 
-        # Add a feedback mechanism
-        st.sidebar.header("Correction")
-        correct_sign_input = st.sidebar.text_input("If the last letter was wrong correct it here:", max_chars=1).upper()
-        if st.sidebar.button("Submit Correction"):
-            if st.session_state.last_log_id and correct_sign_input:
-                db.log_feedback(db.connection, st.session_state.last_log_id, correct_sign_input)
-                st.sidebar.success(f"Feedback submitted.")
-            else:
-                st.sidebar.warning("A prediction must be logged first")
-                    
-    elif action == "Voice to Sign":
+    # 2nd Mode: Voice to Sign
+    elif app_mode == "Voice to Sign (Avatars)":
         st.header("Speak a word or sentence")
-        if st.button("Start Listening", type="primary"):
-            with st.pinner("Listening...0"):
+        if st.button("Start listening", type="summary"):
+            with st.spinner("Listening..."):
                 sentence = listen_voice()
                 
             if sentence:
                 st.success(f"You said: \"{sentence}\"")
-                st.info("Displaying sign language avatar...")
-                
+                st.info("Displaing sign language avatar...")
                 user_gender = st.session_state.user_info.get('gender', 'female')
-                
                 for char in sentence.upper():
                     if char.isalpha():
                         gif_path = f"avatars/{user_gender}/{char.lower()}.gif"
                         if os.path.exists(gif_path):
                             st.image(gif_path, caption=f"Sign for '{char}'", width=250)
-                            time.sleep(1) # Pause between signs
-                            
+                            time.sleep(1)
                         else:
                             st.warning(f"No avatar found for '{char}'")
                     elif char.isspace():
-                        time.sleep(1) # Pause for spaces
+                        time.sleep()
             else:
                 st.error("Could not understand the audio. Please try again")
                 
-# Main application loop (for updating UI from session state)
-if st.session_state.user_info and choice == "Interpreter" and action == "Sign to Voice":
-    confidence_threshold = 0.90 # Only accept high-confidence predictions
-    details_placeholder = st.empty()
-    sentence_placeholder = st.empty()
-    while True:
-        if "current_prediction_data" in st.session_state:
-            data = st.session_state.current_prediction_data
-            
-            # Update the details placeholder
-            details_placeholder.info(f"**Current Sign:**{data['sign']}\n\n" f"**Confidence:**{data['confidence']:.2f}")
-            
-            # Checks for a stable prediction for the buffer
-            if len(st.session_state.prediction_buffer) == st.session_state.prediction_buffer.maxlen:
-                stable_sign = max(set(st.session_state.prediction_buffer), key=st.session_state.prediction_buffer.count)
+    # 3rd Mode: Admin (for populating the vector DB)
+    elif app_mode == "Admin: Teach AI New Signs":
+        st.header("Add New Signs to the Knowledge Base")
+        st.info("Teach AI by showing it a sign and giving it a label. This will create and store a high-quality embedding in the TiDB vector database.")
+        
+        sign_label = st.text_input("Enter the word or letter for this sign:", placeholder="e.g., A, Hello").strip()
+        webrtc_ctx = webrtc_streamer(key="ingest-stream", async_processing=True)
+        
+        if st.button("Generate and Save Embedding", type="primary"):
+            if webrtc_ctx.video_receiver and sign_label:
+                frame = webrtc_ctx.video_receiver.get_latest_frame()
+                img = frame.to_ndarray(format="bgr24")
+                embedding, display_img = get_embedding_from_frame(img, model)
                 
-                # Checks if this stable sign is new and confident
-                if stable_sign != st.session_state.get('last_spoken_sign') and data['confidence'] > confidence_threshold:
-                    # Update the sentence and UI
-                    st.session_state.translated_sentence += stable_sign
-                    sentence_placeholder.markdown(f"## `st.session_state.translated_sentence`")
+                if embedding:
+                    st.image(display_img, channels="BGR", caption="Captured Hand for Embedding")
+                    user_id = st.session_state.user_info['user_id']
+                    success = db.add_sign_vector(db_connection, sign_label, embedding, user_id)
+                    if success:
+                        st.success(f"Successfully saved embedding for '{sign_label}'!")
+                        st.balloons()
+                    else:
+                        st.error("Fialed to save embedding. Check terminal logs.")
+                
+                else:
+                    st.warning("No hand detected, Please position the hand clearly.")
                     
-                    # Speak the new letter
-                    speak_text(stable_sign)
-                    st.session_state.last_spoken_sign = stable_sign # To prevent re-speaking
-                    
-                    # Log to TiDB
-                    current_user_id = st.session_state.user_info['user_id']
-                    log_id = db.log_prediction(
-                        connection=db_connection,
-                        session_id=st.session_state.session_id,
-                        prediction=stable_sign,
-                        confidence=data['confidence'],
-                        user_id=current_user_id
-                    )
-                    st.session_state.last_log_id = log_id
-                    
-                    # Clears buffer after successful action
-                    st.session_state.prediction_buffer.clear()
-                    
-        time.sleep(0.1)
+            else:
+                st.warning("Please start webcam and enter label.")

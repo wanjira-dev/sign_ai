@@ -1,6 +1,6 @@
 .venv
 __pycache__
-sign_model.tflite
-sign_mnist_train.csv
+data/
+landmark_model.h5
 .env
 certs\

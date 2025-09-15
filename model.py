@@ -1,73 +1,88 @@
 import cv2
+import streamlit as st
 import numpy as np
+
+import mediapipe as mp
 import tensorflow as tf
 
-def load_sign_model(model_path='sign_model.h5'):
-    """
-    Loads the trained Keras model from the specified H5 file.
-    Args:
-        model_path (str): The path to the .h5 model file.
-    Returns:
-        A loaded Keras model object
-    """
+from mediapipe.python.solutions import hands as mp_hands
+from mediapipe.python.solutions import drawing_utils as mp_drawing
+
+# Initializing hand solution
+hands_solution = mp_hands.Hands(
+    static_image_mode=True,
+    max_num_hands=1,
+    min_detection_confidence=0.5    
+)
+
+
+# Model loading
+@st.cache_resource # Using streamlit caching for efficiency
+def load_landmark_model(model_path='landmark_model.h5'):
+    """Loads the trained Keras Embedding model"""
     try:
         model = tf.keras.models.load_model(model_path)
-        print(f"Model loaded successfully from {model_path}")
+        print(f"Embedding model loaded successfully from {model_path}")
         return model
     except Exception as e:
-        print(f"Error loading model: {e}")
-        print("Please ensure 'sign_model.h5' is in the correct directory and is a valid Keras model.")
+        print(f"Error loading embedding models: {e}")
         return None
-
-def preprocess_image(frame, target_size=(64, 64)):
+    
+# Landmark extraction
+def extract_hand_landmarks(frame):
     """
-    Preprocesses a single frame from the webcam for model prediction.
-    This function implements a Region of Interest (ROI) to isolate the hand.
-
+    Uses MediaPipe to detect hand landmarks from a single frame.
+    
     Args:
-        frame (numpy.ndarray): The raw BGR frame from OpenCV.
-        target_size (tuple): The target image size (width, height) for the model.
-
+        frame (numpy.ndarray): The raw BGR frame from OpenCV
+        
     Returns:
         tuple: A tuple containing:
-            - preprocessed_img (numpy.ndarray): The final image ready for model input.
-            - display_img (numpy.ndarray): The original frame with ROI box drawn on it.
+            - landmarks (list | None): A flattened list of 63 coordinates (21 * 3) or None if no hand is detected.
+            - display_img (numpy.ndarray): The original frame with landmarks drawn on it for visual feedback.
     """
-
-    # 1. Define and draw the Region of Interest (ROI)
-    h, w, _ = frame.shape
-
-    # Define a square ROI in the center of the frame
-    # This guides the user to place their hand in predictable location.
-    roi_size = 300
-    x1 = int((w - roi_size) / 2)
-    y1 = int((h - roi_size) / 2)
-    x2 = x1 + roi_size
-    y2 = y1 + roi_size
-
-    # Create a copy of the frame to draw on for display
     display_img = frame.copy()
-    cv2.rectangle(display_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    image_rgb.flags.writeable = False
+    results = hands_solution.process(image_rgb)
+    image_rgb.flags.writeable = True
+    landmarks_list = None
+    if results.multi_hand_landmarks:
+        hand_landmarks = results.multi_hand_landmarks[0]
+        mp_drawing.draw_landmarks(display_img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+        wrist_coords = hand_landmarks.landmark[0]
+        landmarks_list = []
+        for landmark in hand_landmarks.landmark:
+            landmarks_list.extend([
+                landmark.x - wrist_coords.x,
+                landmark.y - wrist_coords.y,
+                landmark.z - wrist_coords.z
+            ])
+    return landmarks_list, display_img
 
-    # 2. Extract and process the ROI
-    # Crop the frame to the defined ROI
-    roi = frame[y1:y2, x1:x2]
-
-    # Convert the ROI to grayscale, as color is often not critical for sign shape
-    gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-
-    # Apply a Gaussian Blur to reduce noise and improve model generalization
-    blurred_roi = cv2.GaussianBlur(gray_roi, (5, 5), 0)
-
-    # Resize the processed ROI to the size your model expects
-    resized_img = cv2.resize(blurred_roi, target_size)
-
-    # 3. Normalize and Reshape for model input
-    # Normalize pixel values to be between 0 and 1
-    normalized_img = resized_img / 255.0
-
-    # Reshape the image to match the model's expected input shape:
-    # (1, height, width, 1) -> (batch_size, height, width, channels)
-    preprocessed_img = np.expand_dims(np.expand_dims(normalized_img, axis=-1), axis=0)
-
-    return preprocessed_img, display_img
+# Pipeline function
+def get_embedding_from_frame(frame, model):
+    """
+    Organises the full pipeline: Frame -> Landmarks -> Embedding
+    
+    Args:
+        frame (numpy.ndarray): The raw BGR frame from OpenCV.
+        model: The loaded Keras embedding model
+        
+    Returns:
+        tuple: A tuple containing:
+            - embedding (list | None): The 128-dim embedding vector or None.
+            - display img (numpy.ndarray): The frame with landmarks drawn
+    """
+    # Get the landmarks using Pipeline
+    landmarks, display_img = extract_hand_landmarks(frame)
+    
+    if landmarks:
+        # Convert to numpy and reshape for the model
+        landmarks_np = np.array(landmarks).reshape(1, 63, 1)
+        
+        # Use the model to predict the embedding
+        embedding = model.predict(landmarks_np)[0]
+        return embedding.tolist(), display_img
+    
+    return None, display_img

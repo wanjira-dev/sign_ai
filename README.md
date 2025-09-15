@@ -1,57 +1,62 @@
 # AI Sign Language Interpreter
 
-This project is a real-time Sign Language interpreter that uses a Convolutional Neural Network (CNN) to translate sign language gestures into text and voice. The system is built with a scalable architecture featuring a Streamlit web interface, a TensorFlow/Keras model for inference, and a TiDB Cloud database for robust data logging, user management, and analytics.
+This project is a real-time American Sign Language (ASL) interpreter that uses a state-of-the-art AI pipeline to translate sign language gestures into text and voice. It leverages MediaPipe for robust hand tracking, a custom neural network for intelligent feature extraction, and a TiDB Cloud database with vector search for scalable and accurate sign recognition.
 
-## Features
+![-----------------------------------------------------](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png)
 
-*   **Real-Time Sign-to-Voice:** Translates ASL letter signs from a live webcam feed into spoken words.
-*   **Voice-to-Sign:** Converts spoken sentences into an animated avatar that performs the corresponding ASL signs.
-*   **User Authentication:** Secure user registration and login system.
-*   **Scalable Backend:** Powered by TiDB Cloud (a distributed SQL database) to log every prediction, manage user sessions, and collect feedback for model improvement.
-*   **Interactive UI:** A user-friendly web interface built with Streamlit.
-*   **Model Feedback Loop:** Allows users to correct misclassified signs, providing valuable data for future model retraining.
+### Key Features
 
-## System Architecture
+*   **Real-Time Interpretation:** Translates signs from a live webcam feed by finding the most similar gesture in its knowledge base.
+*   **AI Pipeline:** Uses MediaPipe to extract hand landmarks, which are then converted into powerful 128-dimensional "embedding" vectors by a custom CNN.
+*   **Scalable Vector Database:** Powered by TiDB Cloud, which stores and searches through thousands of sign embeddings in milliseconds using approximate nearest neighbor (ANN) search.
+*   **Teachable AI:** An "Admin Mode" allows users to easily teach the system new signs, continuously expanding its vocabulary.
+*   **Secure User Authentication:** Features a full registration and login system to manage user sessions.
 
-The application follows a modern, scalable architecture designed for real-time AI services.
+### System Architecture
+
+The application is built on a modern, decoupled architecture designed for real-time AI inference and data management.
 
 ```
-┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐
-│  Streamlit UI    │<---->│ Sign AI Backend  │<---->│   TiDB Cloud     │
-│ (Webcam, Display)│      │  (Python, TF)    │      │ (Users, Logs)    │
-└──────────────────┘      └──────────────────┘      └──────────────────┘
+┌───────────┐      ┌────────────────┐      ┌──────────────────┐      ┌────────────────┐
+│  Webcam   │----->│   MediaPipe    │----->│    Custom NN     │----->│  TiDB Cloud    │
+│ (Input)   │      │(Landmark Extr.)│      │(Embedding Model) │      │(Vector Search) │
+└───────────┘      └────────────────┘      └──────────────────┘      └───────┬────────┘
+                                                                            │
+                                                                            ▼
+                                                                     ┌───────────┐
+                                                                     │ Streamlit │
+                                                                     │ (UI)      │
+                                                                     └───────────┘
 ```
 
----
+![-----------------------------------------------------](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png)
 
-## 🚀 Getting Started
+## Getting Started (Local Setup)
 
 Follow these steps to set up and run the project on your local machine.
 
 ### 1. Prerequisites
 
-*   Python
-*   A webcam connected to your computer
-*   A microphone for the Voice-to-Sign feature
-*   A free [TiDB Cloud](https://tidbcloud.com/) account
+*   Python 3.9 - 3.11
+*   A webcam and microphone
+*   A free [TiDB Cloud](https://tidbcloud.com/) account for the database backend
 
 ### 2. Clone the Repository
 
-Clone this project to your local machine:
 ```bash
 git clone <your-repository-url>
-cd <your-repository-folder>
+cd sign-ai-project
 ```
 
-### 3. Set Up the Python Environment
+### 3. Set Up a Virtual Environment
 
-It is highly recommended to use a virtual environment to manage project dependencies.
+It is strongly recommended to use a virtual environment.
 
 ```bash
 # Create a virtual environment
 python -m venv .venv
 
-# Activate the virtual environment
+# Activate it
 # On Windows:
 .venv\Scripts\activate
 # On macOS/Linux:
@@ -60,102 +65,67 @@ source .venv/bin/activate
 
 ### 4. Install Dependencies
 
-Install all the required Python libraries using the `requirements.txt` file.
+Install all required Python libraries from the `requirements.txt` file.
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 5. Set Up the TiDB Cloud Database
+### 5. Configure the TiDB Cloud Database
 
-This application requires a TiDB Cloud cluster to function. The free Serverless Tier is perfect for this project.
+The application's "memory" is a TiDB Cloud cluster. The free Serverless Tier is perfect for this.
 
-1.  **Create a Cluster:**
-    *   Log in to your [TiDB Cloud](https://tidbcloud.com/) account.
-    *   Create a new **Serverless** cluster. Give it a name (e.g., `sign-ai-cluster`) and choose a region near you.
-
+1.  **Create a Cluster:** Log in to [TiDB Cloud](https://tidbcloud.com/) and create a free **Serverless** cluster.
 2.  **Get Credentials:**
-    *   Once the cluster is "Available", click the **"Connect"** button.
-    *   **Generate a password** and **copy it somewhere safe**.
-    *   Under "Allow Access", click **"Allow Access from Anywhere"**. This adds `0.0.0.0/0` to your IP whitelist.
-    *   From the "Connect with" -> "General" tab, download the **CA certificate** (`ca.pem`).
-
+    *   Click the **"Connect"** button on your cluster's dashboard.
+    *   **Generate a password** and copy it securely.
+    *   Under "Allow Access", click **"Allow Access from Anywhere"**.
+    *   Download the **CA certificate** (`ca.pem`).
 3.  **Configure Environment Variables:**
-    *   Create a file named `.env` in the root of the project directory.
-    *   Move the downloaded `ca.pem` file into a new folder named `certs`.
-    *   Copy the contents of `.env.example` into your new `.env` file and fill it out with your cluster's details. It should look like this:
+    *   Create a folder named `certs` in your project and move `ca.pem` into it.
+    *   Create a file named `.env` in the root of the project.
+    *   Copy the following template into your `.env` file and fill it with your credentials:
 
     ```ini
     # .env file
     TIDB_HOST="your-cluster-host.tidb.cloud"
     TIDB_PORT="4000"
     TIDB_USER="your-user.root"
-    TIDB_PASSWORD="your-secret-password"
+    TIDB_PASSWORD="your-secret-password-you-copied"
     TIDB_DB_NAME="sign_ai_db"
     TIDB_SSL_CA="certs/ca.pem"
     ```
-    The application will automatically create the database and tables on the first run.
 
-   To test the connection to the TiDB Cloud:
-   Run this script:
-   ```
-   python test_tidb_connection.py
-   ```
+### 6. Train the AI Model
 
-### 6. Prepare the AI Model
+The application requires a model file named `landmark_model.h5` to function. You must train this model on a dataset of sign language images.
 
-The application uses a pre-trained model named `sign_model.h5`.
-
-*   **To use the existing model:** Ensure `sign_model.h5` is present in the root project directory.
-*   **To train a new model:**
-    1.  Organize your image dataset into `data/train` and `data/test` directories, with subdirectories for each letter (A-Z).
-    2.  Run the training script:
-        ```bash
-        python train_model.py
-        ```
-    3.  This will generate a new, optimized `sign_model.h5` file in your project directory.
-
----
-
-## 🏃‍♀️ Running the Application
-
-Once the setup is complete, you can start the Streamlit web server.
-
-1.  Make sure your virtual environment is activated.
-2.  Run the following command in your terminal:
+1.  **Download the Dataset:** The [Kaggle ASL Alphabet dataset](https://www.kaggle.com/datasets/grassknoted/asl-alphabet) is highly recommended. Download and unzip it.
+2.  **Structure the Data:** Create a `data/` folder in your project, and inside it, a `train/` folder. Move all the letter folders (A, B, C, del, space, etc.) from the unzipped dataset into `data/train/`.
+3.  **Run the Training Script:** Execute the training script from your terminal. This will process all the images, train the neural network, and save the `landmark_model.h5` file.
     ```bash
-    streamlit run app.py
+    python train_model.py
     ```
-3.  Your web browser will automatically open with the application running.
 
-## How to Use the App
-
-1.  **Sign Up / Sign In:** Create a new user account or log in with existing credentials.
-2.  **Select a Mode:**
-    *   **Sign to Voice:** Your webcam will activate. Place your hand inside the green box and perform an ASL letter sign. The app will predict the letter, add it to the sentence, and speak it out loud.
-    *   **Voice to Sign:** Click "Start Listening" and speak a word or sentence. An animated avatar will perform the signs for each letter in the sentence.
+### 💡 Tip: Training on Google Colab
+> Training the model can be slow on a laptop. For a massive speed boost, you can use Google Colab's free T4 GPUs. The workflow is simple: ZIP your `data` folder, upload it to a Colab notebook, copy the contents of `train_model.py` into a cell, and run it there. Then, download the resulting `landmark_model.h5` file back to your local project.
 
 ---
 
-## Project Structure
+## Running the Application
 
+Once setup is complete, launch the Streamlit app.
+
+```bash
+streamlit run app.py
 ```
-.
-├── .venv/                 # Virtual environment folder
-├── avatars/               # GIFs for the Voice-to-Sign feature
-├── certs/
-│   └── ca.pem             # TiDB Cloud SSL certificate
-├── data/                  # (Optional) Dataset for training
-│   ├── train/
-│   └── test/
-├── .env                   # Environment variables (DB credentials)
-├── .gitignore             # Files to be ignored by Git
-├── app.py                 # Main Streamlit application file
-├── model.py               # Model loading and image preprocessing
-├── requirements.txt       # List of Python dependencies
-├── sign_model.h5          # The trained CNN model
-├── tidb_connector.py      # Handles all database interactions
-├── train_model.py         # Script to train a new model
-├── utils.py               # Utility functions (TTS, STT)
-└── README.md              # This file
-```
+
+Your web browser will open with the application.
+
+### How to Use the App
+
+1.  **Sign Up / Sign In:** Create a new user account.
+2.  **Teach the AI:** Switch to **"Admin: Teach AI New Signs"** mode.
+    *   For each sign you trained on (A, B, C, etc.), type its label, perform the sign for the camera, and click "Generate and Save Embedding". This populates your TiDB knowledge base.
+3.  **Interpret Signs:** Switch to **"Interpreter (Sign to Voice)"** mode to get real-time predictions.
+4.  **Use Voice to Sign:** Switch to **"Voice to Sign (Avatars)"** to see text converted into animated sign language GIFs.

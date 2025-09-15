@@ -1,14 +1,18 @@
 streamlit
 streamlit-webrtc
-opencv-python
+opencv-python-headless
 tensorflow
 mysql-connector-python
-speechrecognition
+python-dotenv
+SpeechRecognition
 pyttsx3
 pipwin
+pypiwin32; sys_platform == 'win32'
 pyaudio
 scikit-learn
 numpy
 pandas
 bcrypt
-
+mediapipe
+protobuf
+pyngrok

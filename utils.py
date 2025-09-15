@@ -34,11 +34,12 @@ def speak_text(text, engine):
         engine: The cached pyttsx3 engine instance.
     """
     # To prevent issues with the engine being used by multiple threads at once
-    engine.stop()
+    # engine.stop()
 
     # Create and start a new thread for the speech synthesis
-    thread = threading.Thread(target=_speak_thread, args=(text, engine))
-    thread.start()
+    # thread = threading.Thread(target=_speak_thread, args=(text, engine))
+    # thread.start()
+    print(f"(TTS Disabled) Would have spoken: {text}")
 
 # Speech to text function
 def listen_voice():
