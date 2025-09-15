@@ -128,4 +128,3 @@ Your web browser will open with the application.
 2.  **Teach the AI:** Switch to **"Admin: Teach AI New Signs"** mode.
     *   For each sign you trained on (A, B, C, etc.), type its label, perform the sign for the camera, and click "Generate and Save Embedding". This populates your TiDB knowledge base.
 3.  **Interpret Signs:** Switch to **"Interpreter (Sign to Voice)"** mode to get real-time predictions.
-4.  **Use Voice to Sign:** Switch to **"Voice to Sign (Avatars)"** to see text converted into animated sign language GIFs.
